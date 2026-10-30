@@ -28,6 +28,8 @@ Grab the Windows installer from the [Releases](https://github.com/WumbooPoo/Know
 
 Or build it yourself below.
 
+Questions about installation, downloads, or updates? See the [FAQ](FAQ.md).
+
 ## Build (Windows)
 
 Requirements: JDK 21, [WiX Toolset 3](https://wixtoolset.org/docs/wix3/) (only for the MSI).
