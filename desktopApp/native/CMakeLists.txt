@@ -82,11 +82,19 @@ if(WIN32)
 endif()
 
 # The app unpacks this DLL into its private runtime directory and loads it from
-# there, where MinGW's own libstdc++/libgcc/winpthread DLLs are not. Linking them
-# statically is what makes the library self-contained; leaving them dynamic makes
-# it import libwinpthread-1.dll and fail to load on a machine without MinGW.
+# there, where MinGW's own libstdc++/libgcc/winpthread DLLs are not. libgcc and
+# libstdc++ stay statically linked for that reason. The bare -static flag is
+# deliberately NOT used: on MSYS2 UCRT GCC 16 it forces a static CRT whose
+# libmingwex references __mingw_fe_dfl_env with no definition, so the link of
+# BOTH DLLs fails (proven 26 Oct 2026). The CRT stays dynamic (system UCRT,
+# present on Windows 10/11); if a built DLL still imports a MinGW runtime DLL
+# (check with objdump -p), ship that DLL beside it instead of re-adding -static.
 if(MINGW)
-    target_link_options(bitchord_analysis PRIVATE -static -static-libgcc -static-libstdc++)
+    target_link_options(bitchord_analysis PRIVATE -static-libgcc -static-libstdc++)
+    # Static winpthread: this MUST live in target_link_libraries (late, after
+    # the objects) — an early -lwinpthread is skipped by ld before the objects
+    # that need it are seen, and the DLL keeps importing libwinpthread-1.dll.
+    target_link_libraries(bitchord_analysis PRIVATE -Wl,-Bstatic -lwinpthread -Wl,-Bdynamic)
 endif()
 
 # The Windows media controls, which are WinRT. MSVC builds them with C++/WinRT;
@@ -113,9 +121,11 @@ if(MINGW AND BITCHORD_HAVE_SMTC_INTEROP AND BITCHORD_HAVE_WINRT_MEDIA)
         target_include_directories(bitchord_smtc PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/win32)
     endif()
     target_compile_options(bitchord_smtc PRIVATE -O2)
-    target_link_libraries(bitchord_smtc PRIVATE runtimeobject ole32 user32)
+    target_link_libraries(bitchord_smtc PRIVATE runtimeobject ole32 user32 -Wl,-Bstatic -lwinpthread -Wl,-Bdynamic)
     # Loaded from the app's private runtime directory, where MinGW's own DLLs are not.
-    target_link_options(bitchord_smtc PRIVATE -static -static-libgcc -static-libstdc++)
+    # Same rule as bitchord_analysis above: libgcc/libstdc++ static, bare -static
+    # omitted (it breaks the link on MSYS2 UCRT GCC 16: __mingw_fe_dfl_env).
+    target_link_options(bitchord_smtc PRIVATE -static-libgcc -static-libstdc++)
 elseif(MSVC)
     add_library(bitchord_smtc SHARED ${CMAKE_CURRENT_SOURCE_DIR}/smtc/smtc_jni.cpp)
     # C++20 rather than the 17 the analyser uses: under 17, C++/WinRT reaches for

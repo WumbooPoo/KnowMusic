@@ -4,20 +4,20 @@ import org.jetbrains.compose.desktop.application.dsl.TargetFormat
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 /** What the packages, the launcher and the settings footer all say. */
-val appVersion: String = providers.gradleProperty("bitchord.version").orNull
+val appVersion: String = providers.gradleProperty("knowmusic.version").orNull
     ?.removePrefix("v")
     ?.takeIf { it.isNotBlank() }
-    ?: "1.8-beta1"
+    ?: "1.8.2"
 
 /** Which platform this build is *for*, which is the host unless told otherwise. */
 val hostIsWindows = System.getProperty("os.name").contains("Windows", ignoreCase = true)
 val hostIsLinux = System.getProperty("os.name").contains("Linux", ignoreCase = true)
 val hostIsMac = System.getProperty("os.name").contains("Mac", ignoreCase = true)
-val targetOs: String = (providers.gradleProperty("bitchord.target").orNull ?: when {
+val targetOs: String = (providers.gradleProperty("knowmusic.target").orNull ?: when {
     hostIsWindows -> "windows"
     hostIsLinux -> "linux"
     hostIsMac -> "macos"
-    else -> error("BitChord desktop supports Linux, Windows, and macOS only")
+    else -> error("KnowMusic desktop supports Linux, Windows, and macOS only")
 }).lowercase()
 
 val hostArch = System.getProperty("os.arch").lowercase()
@@ -36,7 +36,7 @@ val nativeClassifier = when (targetOs) {
     "windows" -> "windows-x86_64"
     "linux" -> "linux-x86_64"
     "macos" -> if (isArm64) "macosx-arm64" else "macosx-x86_64"
-    else -> error("BitChord desktop supports Linux, Windows, and macOS only")
+    else -> error("KnowMusic desktop supports Linux, Windows, and macOS only")
 }
 private fun localProperty(name: String): String = rootProject.file("local.properties")
     .takeIf { it.isFile }
@@ -366,10 +366,43 @@ tasks.named<ProcessResources>("processResources") {
         include("*.dll")
         into("native")
     }
+    // The analyser DLL still imports libwinpthread-1.dll: its pthread use comes
+    // from static libstdc++, which the driver links after any user -Bstatic
+    // flag, so no flag position can static-link it. Ship the MinGW runtime
+    // DLL beside the native libraries instead; the loader unpacks and
+    // pre-loads it before the analyser (see DesktopAnalysisRuntime).
+    findOnPath("g++")?.parentFile?.let { mingwBin ->
+        from(mingwBin) {
+            include("libwinpthread-1.dll")
+            into("native")
+        }
+    }
     // The Automix models, taken from the Android module rather than copied into this one.
     from(rootProject.file("app/src/main/assets")) {
         include("*.onnx")
         into("models")
+    }
+    // Loud failure, not a silent skip: on a Windows build the SMTC DLL must be
+    // packaged, otherwise system media keys are dead with only a log line.
+    doLast {
+        if (targetOs == "windows") {
+            val smtc = layout.buildDirectory.file("resources/main/native/bitchord_smtc.dll").get().asFile
+            if (!smtc.exists()) {
+                error(
+                    "bitchord_smtc.dll was not packaged: install CMake, Ninja and a MinGW C++ " +
+                        "compiler with WinRT media headers, stop any stale Gradle daemon " +
+                        "(./gradlew --stop), then rebuild.",
+                )
+            }
+            val winpthread = layout.buildDirectory.file("resources/main/native/libwinpthread-1.dll").get().asFile
+            if (!winpthread.exists()) {
+                error(
+                    "libwinpthread-1.dll was not packaged: the analyser DLL imports it " +
+                        "(see the MinGW runtime note above); the MinGW bin directory " +
+                        "must be on PATH for the Gradle daemon, then rebuild.",
+                )
+            }
+        }
     }
 }
 
@@ -389,7 +422,7 @@ val windowsPortableAssemble by tasks.registering {
     group = "distribution"
     description = "Lays out a Windows-runnable folder: application jars, Windows natives, launcher."
     dependsOn(tasks.named("jar"))
-    val stage = windowsPortableDir.map { it.dir("BitChord") }
+    val stage = windowsPortableDir.map { it.dir("KnowMusic") }
     val appJar = tasks.named<Jar>("jar").flatMap { it.archiveFile }
     val runtime = configurations.named("runtimeClasspath")
     val version = appVersion
@@ -418,22 +451,22 @@ val windowsPortableAssemble by tasks.registering {
             val name = if (group.isNullOrBlank()) artifact.file.name else "$group.${artifact.file.name}"
             artifact.file.copyTo(File(lib, name), overwrite = true)
         }
-        appJar.get().asFile.copyTo(File(lib, "bitchord-app.jar"), overwrite = true)
+        appJar.get().asFile.copyTo(File(lib, "knowmusic-app.jar"), overwrite = true)
 
         // `lib\*` rather than a spelled-out classpath: the wildcard is what keeps this working when
         // a dependency is added, and the JVM is what expands it.
-        File(target, "BitChord.bat").writeText(
+        File(target, "KnowMusic.bat").writeText(
             buildString {
                 appendLine("@echo off")
                 appendLine("setlocal")
-                appendLine("rem BitChord, portable. Needs a Java 21+ runtime on PATH or in JAVA_HOME.")
+                appendLine("rem KnowMusic, portable. Needs a Java 21+ runtime on PATH or in JAVA_HOME.")
                 appendLine("set \"HERE=%~dp0\"")
                 appendLine("set \"RUNNER=java\"")
                 appendLine("if defined JAVA_HOME set \"RUNNER=%JAVA_HOME%\\bin\\java\"")
-                append("\"%RUNNER%\" -Dbitchord.version=$version")
-                if (moduleIndex.isNotBlank()) append(" -Dbitchord.module.index=$moduleIndex")
+                append("\"%RUNNER%\" -Dknowmusic.version=$version")
+                if (moduleIndex.isNotBlank()) append(" -Dknowmusic.module.index=$moduleIndex")
                 if (lastfmKey.isNotBlank() && lastfmSharedSecret.isNotBlank()) {
-                    append(" -Dbitchord.lastfm.key=$lastfmKey -Dbitchord.lastfm.secret=$lastfmSharedSecret")
+                    append(" -Dknowmusic.lastfm.key=$lastfmKey -Dknowmusic.lastfm.secret=$lastfmSharedSecret")
                 }
                 appendLine(" -cp \"%HERE%lib\\*\" $mainClass %*")
                 appendLine("endlocal")
@@ -447,8 +480,8 @@ val windowsPortableAssemble by tasks.registering {
             ZipFile(jar).use { zip -> zip.getEntry(entry) != null }
         }
         val problems = buildList {
-            if (!holds("com/music/bitchord/desktop/MainKt.class")) {
-                add("the BitChord desktop entry point is missing")
+            if (!holds("com/music/knowmusic/desktop/MainKt.class")) {
+                add("the KnowMusic desktop entry point is missing")
             }
             if (!holds("androidx/compose/runtime/Composer.class")) {
                 add("the Compose runtime is missing")
@@ -484,12 +517,12 @@ val windowsPortable by tasks.registering(Zip::class) {
     description = "Zips the portable Windows folder for copying to a Windows machine."
     dependsOn(windowsPortableAssemble)
     from(windowsPortableDir)
-    archiveFileName.set("BitChord-$appVersion-windows-portable.zip")
+    archiveFileName.set("KnowMusic-$appVersion-windows-portable.zip")
     destinationDirectory.set(layout.buildDirectory.dir("distributions"))
     doLast { logger.lifecycle("windowsPortable: ${archiveFile.get().asFile.absolutePath}") }
 }
 
-val composeMainClass = "com.music.bitchord.desktop.MainKt"
+val composeMainClass = "com.music.knowmusic.desktop.MainKt"
 
 compose.desktop {
     application {
@@ -497,17 +530,33 @@ compose.desktop {
             it.metadata.installationPath.asFile.absolutePath
         }.get()
         mainClass = composeMainClass
-        jvmArgs("-Xmx512m")
+        jvmArgs("-Xmx256m")
+        // JavaCPP's decoder gate reads the whole process working set and its
+        // default cap (1024M here) sits BELOW a normal session's footprint
+        // (JVM + Skiko + JavaFX WebView), so every decode failed once the
+        // working set crossed it until restart. 3 GiB ceiling, not a
+        // reservation; also set first thing in Main.kt.
+        jvmArgs("-Dorg.bytedeco.javacpp.maxphysicalbytes=3221225472")
+        // 30 Okt 2026: DIRECT_X menyebabkan crash fatal (hs_err_pid25244.log:
+        // EXCEPTION_ACCESS_VIOLATION di skiko-windows-x64.dll, Direct3DRedrawer
+        // .makeDirectXSurface dereferensi null saat surface dibuat ulang di
+        // sekitar minimize — jendela nge-freeze, musik jalan terus, lalu
+        // proses mati). Backend DirectX ditinggalkan; OPENGL menghindari
+        // jalur swapchain DirectX itu sepenuhnya. Uji dropped-frame yang
+        // dulu jadi alasan pin DIRECT_X kalah penting dibanding stabilitas:
+        // kalau Skiko nanti memperbaiki bug surface DirectX, DIRECT_X boleh
+        // dicoba lagi — tapi jangan tanpa retest minimize/restore berulang.
+        jvmArgs("-Dskiko.renderApi=OPENGL")
         jvmArgs("-XX:+UseG1GC", "-XX:G1PeriodicGCInterval=20000", "-XX:G1PeriodicGCSystemLoadThreshold=0")
-        jvmArgs("-Dbitchord.version=$appVersion")
+        jvmArgs("-Dknowmusic.version=$appVersion")
         if (desktopModuleIndexUrl.isNotBlank()) {
-            jvmArgs("-Dbitchord.module.index=$desktopModuleIndexUrl")
+            jvmArgs("-Dknowmusic.module.index=$desktopModuleIndexUrl")
         }
         if (lastfmApiKey.isNotBlank() && lastfmSecret.isNotBlank()) {
-            jvmArgs("-Dbitchord.lastfm.key=$lastfmApiKey", "-Dbitchord.lastfm.secret=$lastfmSecret")
+            jvmArgs("-Dknowmusic.lastfm.key=$lastfmApiKey", "-Dknowmusic.lastfm.secret=$lastfmSecret")
         }
         if (listenTogetherServer.isNotBlank()) {
-            jvmArgs("-Dbitchord.listentogether.server=$listenTogetherServer")
+            jvmArgs("-Dknowmusic.listentogether.server=$listenTogetherServer")
         }
 
         buildTypes.release.proguard {
@@ -526,10 +575,10 @@ compose.desktop {
                 TargetFormat.Deb,
                 TargetFormat.Rpm,
             )
-            packageName = "BitChord"
+            packageName = "KnowMusic"
             packageVersion = nativePackageVersion
-            description = if (targetOs == "windows") "BitChord" else "Aesthetic YouTube Music client"
-            vendor = "BitChord contributors"
+            description = if (targetOs == "windows") "KnowMusic" else "Aesthetic YouTube Music client"
+            vendor = "KnowMusic"
             copyright = "Copyright © 2026 BitChord contributors"
 
             modules(
@@ -558,9 +607,9 @@ compose.desktop {
 
             macOS {
                 iconFile.set(project.file("packaging/icons/AppIcon.icns"))
-                bundleID = "com.music.bitchord"
+                bundleID = "com.music.knowmusic"
                 appCategory = "public.app-category.music"
-                dockName = "BitChord"
+                dockName = "KnowMusic"
                 infoPlist {
                     extraKeysRawXml = """
                         <key>NSRequiresAquaSystemAppearance</key>
@@ -579,8 +628,8 @@ compose.desktop {
 
             windows {
                 iconFile.set(project.file("packaging/icons/AppIcon.ico"))
-                upgradeUuid = "8f3c1d24-6a2b-4f5e-9c17-2b8d54e0a913"
-                menuGroup = "BitChord"
+                upgradeUuid = "284d38f0-a03b-4f33-bc3e-3d0ad5ecdf00"
+                menuGroup = "KnowMusic"
                 shortcut = true
                 dirChooser = false
                 perUserInstall = true
