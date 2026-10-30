@@ -82,7 +82,7 @@ A DirectX surface crash (the app froze on minimize with a fatal error in the Ski
 
 ### Where do lyrics come from?
 
-Public lyric providers (KuGou, LRCLIB, Musixmatch, Genius) with candidate scoring reimplemented from scratch. No Liner code is used — its license is incompatible with GPLv3.
+Public lyric providers (KuGou, LRCLIB, Musixmatch, Genius) with candidate scoring reimplemented from scratch.
 
 ### Is there a Linux version?
 
