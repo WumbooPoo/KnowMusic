@@ -631,7 +631,7 @@ compose.desktop {
                 upgradeUuid = "284d38f0-a03b-4f33-bc3e-3d0ad5ecdf00"
                 menuGroup = "KnowMusic"
                 shortcut = true
-                dirChooser = false
+                dirChooser = true
                 perUserInstall = true
             }
         }
