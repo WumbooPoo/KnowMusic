@@ -24,7 +24,9 @@ On top of everything BitChord already does (search, browse and play from YouTube
 
 ## Download
 
-No releases are published yet — build it yourself below. Installer releases will appear on the [Releases](https://github.com/WumbooPoo/KnowMusic/releases) page once published.
+Grab the Windows installer from the [Releases](https://github.com/WumbooPoo/KnowMusic/releases) page: **KnowMusic-1.8.29.msi** (305 MB, VirusTotal 0/40).
+
+Or build it yourself below.
 
 ## Build (Windows)
 
@@ -55,3 +57,4 @@ KnowMusic is an independent, community-driven third-party audio player and clien
 ## License
 
 This project is licensed under the **GNU General Public License v3.0 (GPLv3)**. See the [LICENSE](LICENSE) file for details.
+
