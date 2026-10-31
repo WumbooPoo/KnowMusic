@@ -622,7 +622,7 @@ compose.desktop {
                 iconFile.set(project.file("packaging/icons/AppIcon.png"))
                 menuGroup = "Audio"
                 appCategory = "AudioVideo;Audio;Player"
-                debMaintainer = "85984486+AbhiTheModder@users.noreply.github.com"
+                debMaintainer = "329031419+WumbooPoo@users.noreply.github.com"
                 rpmLicenseType = "GPL-3.0"
             }
 
